@@ -1,11 +1,1 @@
-{
-  "buildCommand": "yarn workspace budget-forecast-client build",
-  "outputDirectory": "client/dist",
-  "installCommand": "yarn install",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api"
-    }
-  ]
-}
+{}
