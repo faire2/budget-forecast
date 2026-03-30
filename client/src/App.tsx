@@ -2,24 +2,33 @@ import { useState } from 'react';
 import { addDays, format } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BalanceAnchor } from './components/BalanceAnchor';
-import { EntryForm, type EntryFormData } from './components/EntryForm';
-import { DayList } from './components/DayList';
+import { EntryDialog, type EntryFormData } from './components/EntryDialog';
+import { DayListCompact } from './components/DayListCompact';
 import { Calendar } from './components/Calendar';
-import { EditOccurrenceDialog } from './components/EditOccurrenceDialog';
 import { useForecasts } from './hooks/useForecasts';
 
 function App() {
   const [balance, setBalance] = useState(50000); // $500.00 in cents
-  const [showEntryForm, setShowEntryForm] = useState(false);
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
-  // Edit dialog state
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
-  const [editingDate, setEditingDate] = useState<string | null>(null);
-  const [editingAmount, setEditingAmount] = useState<string>('');
-  const [editingNote, setEditingNote] = useState<string | null>(null);
+  // Entry dialog state
+  const [entryDialogState, setEntryDialogState] = useState<{
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    date: string;
+    entryData?: {
+      entryId: number;
+      amount: string; // cents
+      type: 'income' | 'expense';
+      note: string | null;
+      date: string;
+      isRecurring: boolean;
+    };
+  }>({
+    isOpen: false,
+    mode: 'create',
+    date: format(new Date(), 'yyyy-MM-dd'),
+  });
 
   const queryClient = useQueryClient();
 
@@ -88,28 +97,6 @@ function App() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
-      setShowEntryForm(false);
-    },
-  });
-
-  // Skip occurrence mutation
-  const skipOccurrenceMutation = useMutation({
-    mutationFn: async ({ entryId, date }: { entryId: number; date: string }) => {
-      const response = await fetch(`/api/entries/${entryId}/occurrences/${date}/skip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`Failed to skip occurrence: ${response.status} ${errorText}`);
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['forecasts'] });
     },
   });
 
@@ -139,9 +126,6 @@ function App() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
-      setIsEditDialogOpen(false);
-      setEditingEntryId(null);
-      setEditingDate(null);
     },
   });
 
@@ -164,68 +148,121 @@ function App() {
     },
   });
 
+  // Update entry mutation (for one-time entries)
+  const updateEntryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: EntryFormData }) => {
+      const response = await fetch(`/api/entries/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: (data.amount / 100).toFixed(2),
+          type: data.type,
+          note: data.note || null,
+          date: data.date,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to update entry: ${response.status} ${errorText}`);
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['forecasts'] });
+    },
+  });
+
   const handleBalanceUpdate = (newBalance: number) => {
     setBalance(newBalance);
     balanceMutation.mutate(newBalance);
   };
 
-  const handleEntrySubmit = (data: EntryFormData) => {
-    entryMutation.mutate(data);
+  const handleAddEntry = (date: string) => {
+    setEntryDialogState({
+      isOpen: true,
+      mode: 'create',
+      date,
+    });
   };
 
-  const handleDayClick = (date: string) => {
-    setExpandedDate(expandedDate === date ? null : date);
-  };
-
-  const handleSkipOccurrence = (entryId: number, date: string) => {
-    skipOccurrenceMutation.mutate({ entryId, date });
-  };
-
-  const handleEditOccurrence = (entryId: number, date: string) => {
-    // Find the entry details from forecasts to populate the dialog
+  const handleEntryClick = (entryId: number, date: string) => {
+    // Find the entry details from forecasts
     const day = forecasts?.find((d) => d.date === date);
     const entry = day?.entries.find((e) => e.id === entryId);
 
     if (entry) {
-      setEditingEntryId(entryId);
-      setEditingDate(date);
-      setEditingAmount(entry.amount);
-      setEditingNote(entry.note);
-      setIsEditDialogOpen(true);
-    }
-  };
-
-  const handleEditOccurrenceSubmit = (data: { overrideAmount?: string; overrideNote?: string | null }) => {
-    if (editingEntryId !== null && editingDate !== null) {
-      editOccurrenceMutation.mutate({
-        entryId: editingEntryId,
-        date: editingDate,
-        data,
+      setEntryDialogState({
+        isOpen: true,
+        mode: 'edit',
+        date,
+        entryData: {
+          entryId,
+          amount: entry.amount,
+          type: entry.type,
+          note: entry.note,
+          date,
+          isRecurring: entry.isRecurring,
+        },
       });
     }
   };
 
-  const handleEditDialogClose = () => {
-    setIsEditDialogOpen(false);
-    setEditingEntryId(null);
-    setEditingDate(null);
+  const handleDialogSubmit = (data: EntryFormData) => {
+    if (entryDialogState.mode === 'create') {
+      // Create new entry
+      entryMutation.mutate(data);
+    } else if (entryDialogState.mode === 'edit' && entryDialogState.entryData) {
+      const { entryId, isRecurring } = entryDialogState.entryData;
+
+      if (isRecurring) {
+        // For recurring entries, create an override
+        const overrideData: { overrideAmount?: string; overrideNote?: string | null } = {};
+
+        // Compare with original values
+        const originalAmountCents = parseFloat(entryDialogState.entryData.amount);
+        if (data.amount !== originalAmountCents) {
+          overrideData.overrideAmount = (data.amount / 100).toFixed(2);
+        }
+
+        if (data.note !== (entryDialogState.entryData.note || '')) {
+          overrideData.overrideNote = data.note || null;
+        }
+
+        if (Object.keys(overrideData).length > 0) {
+          editOccurrenceMutation.mutate({
+            entryId,
+            date: entryDialogState.date,
+            data: overrideData,
+          });
+        }
+      } else {
+        // For one-time entries, update the full entry
+        updateEntryMutation.mutate({ id: entryId, data });
+      }
+    }
   };
 
-  const handleDeleteEntry = (entryId: number) => {
-    if (window.confirm('Are you sure you want to delete this entry?')) {
-      deleteEntryMutation.mutate(entryId);
+  const handleDialogClose = () => {
+    setEntryDialogState({
+      ...entryDialogState,
+      isOpen: false,
+    });
+  };
+
+  const handleDeleteEntry = () => {
+    if (entryDialogState.entryData) {
+      deleteEntryMutation.mutate(entryDialogState.entryData.entryId);
     }
   };
 
   const handleCalendarDateSelect = (date: string) => {
-    // Expand the selected date in the day list
-    setExpandedDate(date);
-
-    // Scroll to the selected date after a short delay to allow DOM update
+    // Scroll to the selected date in the day list
     setTimeout(() => {
       const element = document.getElementById(`day-${date}`);
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
   };
@@ -272,60 +309,21 @@ function App() {
           )}
         </section>
 
-        {/* Entry Form Section */}
-        <section className="mb-8">
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Add Entry</h2>
-              {!showEntryForm && (
-                <button
-                  onClick={() => setShowEntryForm(true)}
-                  className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
-                  aria-label="Add new income or expense entry"
-                >
-                  New Entry
-                </button>
-              )}
-            </div>
-            {showEntryForm ? (
-              <>
-                <EntryForm
-                  onSubmit={handleEntrySubmit}
-                  onCancel={() => setShowEntryForm(false)}
-                />
-                {entryMutation.isPending && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground">
-                    Creating entry...
-                  </div>
-                )}
-                {entryMutation.isError && (
-                  <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
-                    {entryMutation.error?.message || 'Failed to create entry'}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Click "New Entry" to add income or expense
-              </p>
-            )}
-          </div>
-        </section>
+        {/* Two-Panel Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-[400px_1fr] gap-6">
+          {/* Left Panel: Calendar */}
+          <section>
+            <Calendar
+              selectedDate={null}
+              datesWithEntries={datesWithEntries}
+              onDateSelect={handleCalendarDateSelect}
+              currentMonth={currentMonth}
+              onMonthChange={handleMonthChange}
+            />
+          </section>
 
-        {/* Calendar Section */}
-        <section className="mb-8">
-          <Calendar
-            selectedDate={expandedDate}
-            datesWithEntries={datesWithEntries}
-            onDateSelect={handleCalendarDateSelect}
-            currentMonth={currentMonth}
-            onMonthChange={handleMonthChange}
-          />
-        </section>
-
-        {/* Forecast Section */}
-        <section>
-          <div className="bg-card border border-border rounded-lg p-6">
+          {/* Right Panel: Day List */}
+          <section>
             <h2 className="text-lg font-semibold mb-4">30-Day Forecast</h2>
 
             {isLoading && (
@@ -339,26 +337,11 @@ function App() {
             )}
 
             {forecasts && forecasts.length > 0 && (
-              <>
-                <DayList
-                  days={forecasts}
-                  expandedDate={expandedDate}
-                  onDayClick={handleDayClick}
-                  onSkipOccurrence={handleSkipOccurrence}
-                  onEditOccurrence={handleEditOccurrence}
-                  onDeleteEntry={handleDeleteEntry}
-                />
-                {(skipOccurrenceMutation.isPending || deleteEntryMutation.isPending) && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground">
-                    Updating occurrence...
-                  </div>
-                )}
-                {(skipOccurrenceMutation.isError || deleteEntryMutation.isError) && (
-                  <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
-                    {skipOccurrenceMutation.error?.message || deleteEntryMutation.error?.message || 'Failed to update entry'}
-                  </div>
-                )}
-              </>
+              <DayListCompact
+                days={forecasts}
+                onEntryClick={handleEntryClick}
+                onAddEntry={handleAddEntry}
+              />
             )}
 
             {forecasts && forecasts.length === 0 && (
@@ -366,20 +349,37 @@ function App() {
                 No forecast data available
               </p>
             )}
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
 
-      {/* Edit Occurrence Dialog */}
-      {isEditDialogOpen && editingEntryId !== null && editingDate !== null && (
-        <EditOccurrenceDialog
-          isOpen={isEditDialogOpen}
-          date={editingDate}
-          originalAmount={editingAmount}
-          originalNote={editingNote}
-          onSubmit={handleEditOccurrenceSubmit}
-          onClose={handleEditDialogClose}
-        />
+      {/* Entry Dialog */}
+      <EntryDialog
+        isOpen={entryDialogState.isOpen}
+        mode={entryDialogState.mode}
+        onClose={handleDialogClose}
+        onSubmit={handleDialogSubmit}
+        {...(entryDialogState.entryData && { initialData: entryDialogState.entryData })}
+        {...(entryDialogState.mode === 'edit' && { onDelete: handleDeleteEntry })}
+      />
+
+      {/* Loading/Error States */}
+      {(entryMutation.isPending || updateEntryMutation.isPending || editOccurrenceMutation.isPending || deleteEntryMutation.isPending) && (
+        <div className="fixed bottom-4 right-4 p-4 bg-card border border-border rounded-lg shadow-lg">
+          <p className="text-sm text-muted-foreground">Processing...</p>
+        </div>
+      )}
+
+      {(entryMutation.isError || updateEntryMutation.isError || editOccurrenceMutation.isError || deleteEntryMutation.isError) && (
+        <div className="fixed bottom-4 right-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg shadow-lg">
+          <p className="text-sm text-destructive">
+            {entryMutation.error?.message ||
+             updateEntryMutation.error?.message ||
+             editOccurrenceMutation.error?.message ||
+             deleteEntryMutation.error?.message ||
+             'Operation failed'}
+          </p>
+        </div>
       )}
     </div>
   );
