@@ -1,10 +1,12 @@
 # Agent Instructions - Budget Forecast App
 
-**Last updated:** 2026-03-26
+**Last updated:** 2026-03-31
 
 ## Project Context
 
-Budget forecasting SPA for therapists with irregular income. Stack: Vite + React + TypeScript + Express + Neon Postgres + Drizzle ORM + shadcn/ui + Tailwind + TanStack Query.
+Budget forecasting SPA for therapists with irregular income. Stack: Vite + React + TypeScript + Vercel Serverless Functions + Neon Postgres + Drizzle ORM + shadcn/ui + Tailwind + TanStack Query.
+
+**Architecture:** Vercel deployment with serverless functions in `/api`, shared code in `/shared`, frontend in `/client`.
 
 **Approved plan:** `/Users/faire/.claude/plans/foamy-twirling-matsumoto.md`
 
@@ -37,11 +39,32 @@ Budget forecasting SPA for therapists with irregular income. Stack: Vite + React
 - User will handle git operations manually
 - Request approval before running `yarn lint`, `yarn test`, `yarn build`
 
-### Code Changes
+### Code Changes & Verification
 - Make minimal, focused changes
 - Prefer editing existing files over creating new ones
-- Run type-check on modified files before claiming completion
+- **CRITICAL: Always verify with the actual build command, not filtered checks**
+- When type-checking, include ALL affected directories (don't filter to only one path)
 - Show verification output (don't assume it passes)
+
+### Verification Protocol
+When making changes that affect multiple directories:
+
+```bash
+# ❌ WRONG - filters hide transitive dependency errors
+npx tsc --noEmit api/**/*.ts | grep "^api/"
+
+# ✅ CORRECT - check all affected code
+npx tsc --noEmit api/**/*.ts shared/**/*.ts
+
+# ✅ BEST - run the actual build command
+cd client && yarn build
+```
+
+**Why this matters:** Filtering type-check output can hide errors in imported dependencies. Always verify the full dependency chain, especially when:
+- Creating new shared code in `/shared`
+- Changing import paths between directories
+- Moving files between workspaces
+- Updating package dependencies
 
 ## TypeScript Rules
 
@@ -182,13 +205,31 @@ One sentence explaining what this does.
 - Skipped occurrences: show grayed/crossed out, exclude from balance
 - Edited occurrences: use override amount, include in balance
 
+## Project Structure
+
+```
+budget-forecast/
+├── api/                    # Vercel serverless functions
+│   ├── balance.ts         # Balance anchor API
+│   ├── forecasts.ts       # Forecast calculation API
+│   └── entries/           # Entry CRUD + overrides
+├── shared/                # Shared code (used by /api)
+│   ├── db/               # Database client & schema
+│   ├── services/         # Business logic (forecast calculator)
+│   └── types/            # TypeScript types
+├── client/               # React frontend (Vite)
+└── server/               # Legacy workspace (minimal, for drizzle-kit only)
+```
+
+**Key Architectural Note:** Dependencies like `drizzle-orm`, `zod`, `date-fns` are in the **root** `package.json` to avoid version conflicts between `/api` and `/shared`.
+
 ## Critical Files (Priority Order)
 
-1. `/server/src/db/schema.ts` - Database schema
-2. `/server/src/services/forecastCalculator.ts` - Core forecast logic
-3. `/server/src/routes/forecasts.ts` - Main API endpoint
+1. `/shared/db/schema.ts` - Database schema
+2. `/shared/services/forecastCalculator.ts` - Core forecast logic
+3. `/api/forecasts.ts` - Main API endpoint (serverless)
 4. `/client/src/hooks/useForecasts.ts` - Server state management
-5. `/client/src/components/DayList.tsx` - Main UI view
+5. `/client/src/components/DayListCompact.tsx` - Main UI view
 6. `/AGENTS.md` - This file (source of truth)
 
 ## Implementation Phases (from Plan)
@@ -212,6 +253,9 @@ One sentence explaining what this does.
 - ❌ Using non-semantic Tailwind classes
 - ❌ Skipping type validation on API boundaries
 - ❌ Forgetting to update DOC_CATALOG.md for new docs
+- ❌ **Filtering type-check output that hides transitive dependency errors**
+- ❌ **Not checking `/shared` when verifying `/api` changes**
+- ❌ **Adding duplicate dependencies in workspace packages (always use root for shared deps)**
 
 ## Questions or Blockers?
 
