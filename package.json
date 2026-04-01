@@ -7,8 +7,8 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently \"yarn workspace budget-forecast-server dev\" \"yarn workspace budget-forecast-client dev\"",
-    "build": "yarn workspace budget-forecast-server build && yarn workspace budget-forecast-client build",
+    "dev": "yarn workspace budget-forecast-client dev",
+    "build": "cd client && yarn build",
     "lint": "yarn workspaces run lint",
     "type-check": "yarn workspaces run type-check",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""

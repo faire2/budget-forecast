@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { addDays, format } from 'date-fns';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { BalanceAnchor } from './components/BalanceAnchor';
 import { EntryDialog, type EntryFormData } from './components/EntryDialog';
 import { DayListCompact } from './components/DayListCompact';
@@ -8,7 +8,7 @@ import { Calendar } from './components/Calendar';
 import { useForecasts } from './hooks/useForecasts';
 
 function App() {
-  const [balance, setBalance] = useState(50000); // $500.00 in cents
+  const [balance, setBalance] = useState(0); // Will be fetched from API
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
   // Entry dialog state
@@ -39,10 +39,33 @@ function App() {
   // Fetch forecast data
   const { data: forecasts, isLoading, isError, error } = useForecasts(todayStr, endDate);
 
+  // Get API base URL from environment variable (for local dev)
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+  // Fetch balance from API
+  const { data: balanceData } = useQuery({
+    queryKey: ['balance'],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/api/balance`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch balance');
+      }
+      return response.json();
+    },
+  });
+
+  // Update local balance state when API data arrives
+  useEffect(() => {
+    if (balanceData?.balance) {
+      const balanceInCents = Math.round(parseFloat(balanceData.balance) * 100);
+      setBalance(balanceInCents);
+    }
+  }, [balanceData]);
+
   // Balance update mutation
   const balanceMutation = useMutation({
     mutationFn: async (newBalance: number) => {
-      const response = await fetch('/api/balance', {
+      const response = await fetch(`${API_BASE_URL}/api/balance`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +105,7 @@ function App() {
         payload.date = data.date;
       }
 
-      const response = await fetch('/api/entries', {
+      const response = await fetch(`${API_BASE_URL}/api/entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -111,7 +134,7 @@ function App() {
       date: string;
       data: { overrideAmount?: string; overrideNote?: string | null };
     }) => {
-      const response = await fetch(`/api/entries/${entryId}/occurrences/${date}/edit`, {
+      const response = await fetch(`${API_BASE_URL}/api/entries/${entryId}/occurrences/${date}/edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -132,7 +155,7 @@ function App() {
   // Delete entry mutation
   const deleteEntryMutation = useMutation({
     mutationFn: async (entryId: number) => {
-      const response = await fetch(`/api/entries/${entryId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/entries/${entryId}`, {
         method: 'DELETE',
       });
 
@@ -151,7 +174,7 @@ function App() {
   // Update entry mutation (for one-time entries)
   const updateEntryMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: EntryFormData }) => {
-      const response = await fetch(`/api/entries/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/entries/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -290,29 +313,30 @@ function App() {
           </p>
         </header>
 
-        {/* Balance Anchor Section */}
-        <section className="mb-8">
-          <BalanceAnchor
-            balance={balance}
-            asOfDate={todayStr}
-            onUpdate={handleBalanceUpdate}
-          />
-          {balanceMutation.isPending && (
-            <div className="mt-2 text-sm text-muted-foreground">
-              Updating balance...
-            </div>
-          )}
-          {balanceMutation.isError && (
-            <div className="mt-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
-              {balanceMutation.error?.message || 'Failed to update balance'}
-            </div>
-          )}
-        </section>
-
         {/* Two-Panel Layout */}
         <div className="grid grid-cols-1 md:grid-cols-[400px_1fr] gap-6">
-          {/* Left Panel: Calendar */}
-          <section>
+          {/* Left Panel: Balance + Calendar */}
+          <section className="space-y-6">
+            {/* Balance Anchor */}
+            <div>
+              <BalanceAnchor
+                balance={balance}
+                asOfDate={todayStr}
+                onUpdate={handleBalanceUpdate}
+              />
+              {balanceMutation.isPending && (
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Updating balance...
+                </div>
+              )}
+              {balanceMutation.isError && (
+                <div className="mt-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
+                  {balanceMutation.error?.message || 'Failed to update balance'}
+                </div>
+              )}
+            </div>
+
+            {/* Calendar */}
             <Calendar
               selectedDate={null}
               datesWithEntries={datesWithEntries}
@@ -359,6 +383,7 @@ function App() {
         mode={entryDialogState.mode}
         onClose={handleDialogClose}
         onSubmit={handleDialogSubmit}
+        defaultDate={entryDialogState.date}
         {...(entryDialogState.entryData && { initialData: entryDialogState.entryData })}
         {...(entryDialogState.mode === 'edit' && { onDelete: handleDeleteEntry })}
       />

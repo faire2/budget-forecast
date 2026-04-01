@@ -1,5 +1,9 @@
 import type { DailyProjection } from '@/types/forecast';
 
+// Get API base URL from environment variable (for local dev)
+// In production (Vercel), this is empty and uses relative paths
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 /**
  * Fetches forecast projections for a date range
  * @param start - Start date in ISO format (YYYY-MM-DD)
@@ -11,7 +15,7 @@ export async function fetchForecasts(
   start: string,
   end: string
 ): Promise<DailyProjection[]> {
-  const url = `/api/forecasts?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+  const url = `${API_BASE_URL}/api/forecasts?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
 
   const response = await fetch(url);
 

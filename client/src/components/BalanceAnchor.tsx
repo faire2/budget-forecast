@@ -18,11 +18,11 @@ export function BalanceAnchor({ balance, asOfDate, onUpdate }: BalanceAnchorProp
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
-  // Format balance in cents to dollars for display
+  // Format balance in cents to CZK for display
   const formatCurrency = (cents: number): string => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('cs-CZ', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'CZK',
     }).format(cents / 100);
   };
 

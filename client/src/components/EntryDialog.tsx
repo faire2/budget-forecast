@@ -19,6 +19,7 @@ type EntryDialogProps = {
   onClose: () => void;
   onSubmit: (data: EntryFormData) => void;
   onDelete?: () => void;
+  defaultDate?: string; // Date to prefill in create mode
   // For edit mode:
   initialData?: {
     entryId: number;
@@ -36,6 +37,7 @@ export function EntryDialog({
   onClose,
   onSubmit,
   onDelete,
+  defaultDate,
   initialData,
 }: EntryDialogProps) {
   const [amountDollars, setAmountDollars] = useState('');
@@ -65,13 +67,13 @@ export function EntryDialog({
         setType('income');
         setNote('');
         setIsRecurring(false);
-        setDate(initialData?.date || '');
+        setDate(defaultDate || '');
         setRecurringRule('weekly');
-        setRecurringStartDate(initialData?.date || '');
+        setRecurringStartDate(defaultDate || '');
       }
       setErrors({});
     }
-  }, [isOpen, mode, initialData]);
+  }, [isOpen, mode, initialData, defaultDate]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};

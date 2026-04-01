@@ -12,17 +12,17 @@ export function DayRow({ day, onEntryClick, onAddEntry }: DayRowProps) {
   const dayIsToday = isToday(new Date(day.date));
 
   const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('cs-CZ', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'CZK',
     }).format(cents / 100);
   };
 
   const formatAmount = (amountString: string) => {
     const cents = parseFloat(amountString);
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('cs-CZ', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'CZK',
     }).format(cents / 100);
   };
 
