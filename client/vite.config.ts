@@ -12,16 +12,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Temporarily disabled proxy - API calls will fail until you configure the correct Vercel URL
-    // Uncomment and set your Vercel URL below once you find it
-    /*
-    proxy: {
-      '/api': {
-        target: 'YOUR_VERCEL_URL_HERE', // e.g., 'https://budget-forecast-abc123.vercel.app'
-        changeOrigin: true,
-        secure: true,
-      },
-    },
-    */
+    // Proxy configured via VITE_API_BASE_URL environment variable
+    // For local dev: Run `vercel dev --listen 3000` first
+    // API calls will go to http://localhost:3000/api/*
   },
 })
