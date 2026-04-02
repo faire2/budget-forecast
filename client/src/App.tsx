@@ -8,6 +8,7 @@ import { Calendar } from './components/Calendar';
 import { EntryListView } from './components/EntryListView';
 import { DeleteRecurringDialog } from './components/DeleteRecurringDialog';
 import { useForecasts } from './hooks/useForecasts';
+import { useEntryDates } from './hooks/useEntryDates';
 import {
   getAllForecastQueries,
   recalculateBalances,
@@ -22,6 +23,7 @@ function App() {
   const [balance, setBalance] = useState(0); // Will be fetched from API
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+  const [forecastStartDate, setForecastStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   // Entry dialog state
   const [entryDialogState, setEntryDialogState] = useState<{
@@ -55,12 +57,15 @@ function App() {
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
 
-  // Forecast window always starts from today (30 days forward)
-  const forecastStartDate = todayStr;
-  const forecastEndDate = format(addDays(today, 29), 'yyyy-MM-dd');
+  // Forecast window (30 days from forecastStartDate)
+  const forecastEndDate = format(addDays(new Date(forecastStartDate), 29), 'yyyy-MM-dd');
 
   // Fetch forecast data
   const { data: forecasts, isLoading, isError, error } = useForecasts(forecastStartDate, forecastEndDate);
+
+  // Fetch calendar dots for current month (independent of forecast window)
+  const currentMonthStr = format(currentMonth, 'yyyy-MM');
+  const { data: entryDates } = useEntryDates(currentMonthStr);
 
   // Get API base URL from environment variable (for local dev)
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -561,19 +566,16 @@ function App() {
   const handleCalendarDateSelect = (date: string) => {
     // Track calendar selection for entry list
     setSelectedCalendarDate(date);
-    // Note: We no longer change forecastStartDate here
-    // The forecast window stays anchored to today, only the entry list filter changes
+    // Reset forecast window to start from selected date
+    setForecastStartDate(date);
   };
 
   const handleMonthChange = (newMonth: Date) => {
     setCurrentMonth(newMonth);
   };
 
-  // Extract dates that have entries for calendar highlighting
-  const datesWithEntries = forecasts?.map((day) => day.date).filter((date) => {
-    const day = forecasts.find((d) => d.date === date);
-    return day && day.entries.length > 0;
-  }) || [];
+  // Use API data for calendar dots (independent of forecast window)
+  const datesWithEntries = entryDates || [];
 
   return (
     <div className="min-h-screen bg-background">
