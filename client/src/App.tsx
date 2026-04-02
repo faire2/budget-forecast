@@ -5,6 +5,8 @@ import { BalanceAnchor } from './components/BalanceAnchor';
 import { EntryDialog, type EntryFormData } from './components/EntryDialog';
 import { DayListCompact } from './components/DayListCompact';
 import { Calendar } from './components/Calendar';
+import { EntryListView } from './components/EntryListView';
+import { DeleteRecurringDialog } from './components/DeleteRecurringDialog';
 import { useForecasts } from './hooks/useForecasts';
 import {
   getAllForecastQueries,
@@ -19,7 +21,7 @@ import type { DailyProjection } from './types/forecast';
 function App() {
   const [balance, setBalance] = useState(0); // Will be fetched from API
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [forecastStartDate, setForecastStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   // Entry dialog state
   const [entryDialogState, setEntryDialogState] = useState<{
@@ -40,15 +42,24 @@ function App() {
     date: format(new Date(), 'yyyy-MM-dd'),
   });
 
+  // Delete recurring dialog state
+  const [deleteRecurringDialogState, setDeleteRecurringDialogState] = useState<{
+    isOpen: boolean;
+    entryId: number;
+    date: string;
+    note: string;
+  } | null>(null);
+
   const queryClient = useQueryClient();
 
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
 
-  // Calculate end date based on forecast start date (30 days from start)
-  const forecastEndDate = format(addDays(new Date(forecastStartDate), 29), 'yyyy-MM-dd');
+  // Forecast window always starts from today (30 days forward)
+  const forecastStartDate = todayStr;
+  const forecastEndDate = format(addDays(today, 29), 'yyyy-MM-dd');
 
-  // Fetch forecast data using dynamic start date
+  // Fetch forecast data
   const { data: forecasts, isLoading, isError, error } = useForecasts(forecastStartDate, forecastEndDate);
 
   // Get API base URL from environment variable (for local dev)
@@ -435,6 +446,70 @@ function App() {
     }
   };
 
+  const handleDeleteEntry = (entryId: number, date: string, isRecurring: boolean) => {
+    // Find entry to get note
+    const day = forecasts?.find(d => d.date === date);
+    const entry = day?.entries.find(e => e.id === entryId);
+
+    if (!entry) return;
+
+    if (isRecurring) {
+      // Show dialog
+      setDeleteRecurringDialogState({
+        isOpen: true,
+        entryId,
+        date,
+        note: entry.note || 'Recurring entry',
+      });
+    } else {
+      // Direct delete with confirmation
+      if (window.confirm(`Delete "${entry.note || 'Entry'}"?`)) {
+        deleteEntryMutation.mutate(entryId);
+      }
+    }
+  };
+
+  const handleDeleteRecurringThis = async () => {
+    if (!deleteRecurringDialogState) return;
+
+    // Skip this occurrence using the skip endpoint
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/entries/${deleteRecurringDialogState.entryId}/occurrences/${deleteRecurringDialogState.date}/skip`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to skip occurrence');
+      }
+
+      // Invalidate queries to refetch
+      queryClient.invalidateQueries({ queryKey: ['forecasts'] });
+    } catch (error) {
+      console.error('Error skipping occurrence:', error);
+    }
+  };
+
+  const handleDeleteRecurringFromNow = async () => {
+    if (!deleteRecurringDialogState) return;
+
+    // For now, just delete all (API doesn't support "from now" yet)
+    // TODO: Implement proper "delete from date forward" API endpoint
+    console.warn('Delete from now not yet implemented - deleting all instead');
+    deleteEntryMutation.mutate(deleteRecurringDialogState.entryId);
+  };
+
+  const handleDeleteRecurringAll = () => {
+    if (!deleteRecurringDialogState) return;
+
+    // Delete entire recurring entry
+    deleteEntryMutation.mutate(deleteRecurringDialogState.entryId);
+  };
+
   const handleDialogSubmit = (data: EntryFormData) => {
     if (entryDialogState.mode === 'create') {
       // Create new entry
@@ -477,16 +552,17 @@ function App() {
     });
   };
 
-  const handleDeleteEntry = () => {
+  const handleDeleteEntryFromDialog = () => {
     if (entryDialogState.entryData) {
       deleteEntryMutation.mutate(entryDialogState.entryData.entryId);
     }
   };
 
   const handleCalendarDateSelect = (date: string) => {
-    // Set the selected date as the new forecast start date
-    // This will trigger a re-fetch of forecasts starting from the clicked date
-    setForecastStartDate(date);
+    // Track calendar selection for entry list
+    setSelectedCalendarDate(date);
+    // Note: We no longer change forecastStartDate here
+    // The forecast window stays anchored to today, only the entry list filter changes
   };
 
   const handleMonthChange = (newMonth: Date) => {
@@ -537,11 +613,19 @@ function App() {
 
             {/* Calendar */}
             <Calendar
-              selectedDate={null}
+              selectedDate={selectedCalendarDate}
               datesWithEntries={datesWithEntries}
               onDateSelect={handleCalendarDateSelect}
               currentMonth={currentMonth}
               onMonthChange={handleMonthChange}
+            />
+
+            {/* Entry List */}
+            <EntryListView
+              selectedDate={selectedCalendarDate}
+              forecasts={forecasts}
+              onEntryClick={handleEntryClick}
+              onDeleteEntry={handleDeleteEntry}
             />
           </section>
 
@@ -564,6 +648,7 @@ function App() {
                 days={forecasts}
                 onEntryClick={handleEntryClick}
                 onAddEntry={handleAddEntry}
+                onDeleteEntry={handleDeleteEntry}
               />
             )}
 
@@ -584,7 +669,18 @@ function App() {
         onSubmit={handleDialogSubmit}
         defaultDate={entryDialogState.date}
         {...(entryDialogState.entryData && { initialData: entryDialogState.entryData })}
-        {...(entryDialogState.mode === 'edit' && { onDelete: handleDeleteEntry })}
+        {...(entryDialogState.mode === 'edit' && { onDelete: handleDeleteEntryFromDialog })}
+      />
+
+      {/* Delete Recurring Dialog */}
+      <DeleteRecurringDialog
+        isOpen={deleteRecurringDialogState?.isOpen || false}
+        onClose={() => setDeleteRecurringDialogState(null)}
+        onDeleteThis={handleDeleteRecurringThis}
+        onDeleteFromNow={handleDeleteRecurringFromNow}
+        onDeleteAll={handleDeleteRecurringAll}
+        entryNote={deleteRecurringDialogState?.note || ''}
+        date={deleteRecurringDialogState?.date || ''}
       />
 
       {/* Loading/Error States */}

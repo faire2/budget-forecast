@@ -1,15 +1,14 @@
 import { format, isToday } from 'date-fns';
-import { TrendingUp, TrendingDown, Plus, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
 import type { DailyProjection, ProjectedEntry } from '../types/forecast';
 
-type DayRowProps = {
+type EntryListRowProps = {
   day: DailyProjection;
   onEntryClick: (entryId: number, date: string) => void;
-  onAddEntry: (date: string, type: 'income' | 'expense') => void;
-  onDeleteEntry?: (entryId: number, date: string, isRecurring: boolean) => void;
+  onDeleteEntry: (entryId: number, date: string, isRecurring: boolean) => void;
 };
 
-export function DayRow({ day, onEntryClick, onAddEntry, onDeleteEntry }: DayRowProps) {
+export function EntryListRow({ day, onEntryClick, onDeleteEntry }: EntryListRowProps) {
   const dayIsToday = isToday(new Date(day.date));
 
   const formatCurrency = (decimalAmount: number) => {
@@ -29,7 +28,6 @@ export function DayRow({ day, onEntryClick, onAddEntry, onDeleteEntry }: DayRowP
 
   return (
     <div
-      id={`day-${day.date}`}
       className={`border border-border rounded-lg overflow-hidden ${
         dayIsToday ? 'bg-accent/10 border-l-4 border-l-accent' : 'bg-card'
       }`}
@@ -57,28 +55,10 @@ export function DayRow({ day, onEntryClick, onAddEntry, onDeleteEntry }: DayRowP
             entry={entry}
             date={day.date}
             onClick={() => onEntryClick(entry.id, day.date)}
+            onDelete={() => onDeleteEntry(entry.id, day.date, entry.isRecurring)}
             formatAmount={formatAmount}
-            {...(onDeleteEntry && { onDelete: () => onDeleteEntry(entry.id, day.date, entry.isRecurring) })}
           />
         ))}
-
-        {/* Add Entry Lines */}
-        <div className="flex gap-2 px-2 py-2">
-          <button
-            onClick={() => onAddEntry(day.date, 'income')}
-            className="flex-1 px-3 py-2 flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950 border border-green-200 dark:border-green-800 rounded transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add income</span>
-          </button>
-          <button
-            onClick={() => onAddEntry(day.date, 'expense')}
-            className="flex-1 px-3 py-2 flex items-center justify-center gap-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 border border-red-200 dark:border-red-800 rounded transition-colors"
-          >
-            <span className="text-base">−</span>
-            <span>Add expense</span>
-          </button>
-        </div>
 
         {/* Balance Line */}
         <div className="px-4 py-2 flex items-center justify-between bg-muted/30">
@@ -100,7 +80,7 @@ type EntryLineProps = {
   entry: ProjectedEntry;
   date: string;
   onClick: () => void;
-  onDelete?: () => void;
+  onDelete: () => void;
   formatAmount: (amount: string) => string;
 };
 
@@ -109,7 +89,7 @@ function EntryLine({ entry, onClick, onDelete, formatAmount }: EntryLineProps) {
   const Icon = isIncome ? TrendingUp : TrendingDown;
 
   return (
-    <div className="w-full px-4 py-2 flex items-center gap-3 group">
+    <div className="w-full px-4 py-2 flex items-center gap-3">
       {/* Icon */}
       <Icon
         className={`w-4 h-4 flex-shrink-0 ${
@@ -117,7 +97,7 @@ function EntryLine({ entry, onClick, onDelete, formatAmount }: EntryLineProps) {
         }`}
       />
 
-      {/* Note/Label - Clickable */}
+      {/* Note/Label - Clickable area */}
       <button
         onClick={onClick}
         className={`flex-1 text-left text-sm min-w-0 hover:underline ${
@@ -145,19 +125,17 @@ function EntryLine({ entry, onClick, onDelete, formatAmount }: EntryLineProps) {
       </span>
 
       {/* Delete button */}
-      {onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-          aria-label="Delete entry"
-          disabled={entry.isSkipped}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="text-muted-foreground hover:text-destructive transition-colors"
+        aria-label="Delete entry"
+        disabled={entry.isSkipped}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 }
