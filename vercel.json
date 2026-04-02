@@ -1,1 +1,16 @@
-{}
+{
+  "buildCommand": "cd client && yarn install && yarn build",
+  "outputDirectory": "client/dist",
+  "installCommand": "yarn install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
