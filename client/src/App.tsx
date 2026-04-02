@@ -10,6 +10,7 @@ import { useForecasts } from './hooks/useForecasts';
 function App() {
   const [balance, setBalance] = useState(0); // Will be fetched from API
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [forecastStartDate, setForecastStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   // Entry dialog state
   const [entryDialogState, setEntryDialogState] = useState<{
@@ -34,10 +35,12 @@ function App() {
 
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
-  const endDate = format(addDays(today, 29), 'yyyy-MM-dd');
 
-  // Fetch forecast data
-  const { data: forecasts, isLoading, isError, error } = useForecasts(todayStr, endDate);
+  // Calculate end date based on forecast start date (30 days from start)
+  const forecastEndDate = format(addDays(new Date(forecastStartDate), 29), 'yyyy-MM-dd');
+
+  // Fetch forecast data using dynamic start date
+  const { data: forecasts, isLoading, isError, error } = useForecasts(forecastStartDate, forecastEndDate);
 
   // Get API base URL from environment variable (for local dev)
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -281,13 +284,9 @@ function App() {
   };
 
   const handleCalendarDateSelect = (date: string) => {
-    // Scroll to the selected date in the day list
-    setTimeout(() => {
-      const element = document.getElementById(`day-${date}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
+    // Set the selected date as the new forecast start date
+    // This will trigger a re-fetch of forecasts starting from the clicked date
+    setForecastStartDate(date);
   };
 
   const handleMonthChange = (newMonth: Date) => {

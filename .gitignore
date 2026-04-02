@@ -29,6 +29,7 @@ coverage/
 playwright-report/
 test-results/
 *.lcov
+.test-temp/
 
 # OS files
 .DS_Store

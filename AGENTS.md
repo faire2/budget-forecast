@@ -46,6 +46,13 @@ Budget forecasting SPA for therapists with irregular income. Stack: Vite + React
 - When type-checking, include ALL affected directories (don't filter to only one path)
 - Show verification output (don't assume it passes)
 
+### Testing & Temporary Files
+- **Use `.test-temp/` folder** for all Playwright tests, test scripts, and temporary files
+- This folder is gitignored and safe for experimentation
+- **Clean up when done**: Delete test files from `.test-temp/` after completing work
+- Screenshot paths: Use `/tmp/` for Playwright screenshots (system temp directory)
+- Example test file location: `.test-temp/test-calendar-interaction.mjs`
+
 ### Verification Protocol
 When making changes that affect multiple directories:
 
