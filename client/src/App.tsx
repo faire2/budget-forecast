@@ -6,6 +6,15 @@ import { EntryDialog, type EntryFormData } from './components/EntryDialog';
 import { DayListCompact } from './components/DayListCompact';
 import { Calendar } from './components/Calendar';
 import { useForecasts } from './hooks/useForecasts';
+import {
+  getAllForecastQueries,
+  recalculateBalances,
+  addEntryToCache,
+  updateEntryInCache,
+  removeEntryFromCache,
+  updateEntryOverrideInCache,
+} from './lib/optimistic-updates';
+import type { DailyProjection } from './types/forecast';
 
 function App() {
   const [balance, setBalance] = useState(0); // Will be fetched from API
@@ -65,7 +74,7 @@ function App() {
     }
   }, [balanceData]);
 
-  // Balance update mutation
+  // Balance update mutation with optimistic updates
   const balanceMutation = useMutation({
     mutationFn: async (newBalance: number) => {
       const response = await fetch(`${API_BASE_URL}/api/balance`, {
@@ -84,12 +93,54 @@ function App() {
 
       return response.json();
     },
-    onSuccess: () => {
+    onMutate: async (newBalance) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['forecasts'] });
+
+      // Snapshot current cache
+      const forecastQueries = getAllForecastQueries(queryClient);
+      const previousForecasts = forecastQueries.map(key => ({
+        key,
+        data: queryClient.getQueryData(key),
+      }));
+      const previousBalance = queryClient.getQueryData(['balance']);
+
+      // Optimistically update all forecast queries
+      forecastQueries.forEach(queryKey => {
+        const data = queryClient.getQueryData<DailyProjection[]>(queryKey);
+        if (data) {
+          const updated = recalculateBalances(data, newBalance);
+          queryClient.setQueryData(queryKey, updated);
+        }
+      });
+
+      // Optimistically update balance query
+      queryClient.setQueryData(['balance'], {
+        balance: (newBalance / 100).toFixed(2),
+        asOfDate: todayStr,
+      });
+
+      return { previousForecasts, previousBalance };
+    },
+    onError: (_err, _newBalance, context) => {
+      // Rollback forecasts
+      if (context?.previousForecasts) {
+        context.previousForecasts.forEach(({ key, data }) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      // Rollback balance
+      if (context?.previousBalance) {
+        queryClient.setQueryData(['balance'], context.previousBalance);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
     },
   });
 
-  // Entry creation mutation
+  // Entry creation mutation with optimistic updates
   const entryMutation = useMutation({
     mutationFn: async (data: EntryFormData) => {
       const payload: Record<string, unknown> = {
@@ -121,12 +172,62 @@ function App() {
 
       return response.json();
     },
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['forecasts'] });
+
+      // Snapshot cache
+      const forecastQueries = getAllForecastQueries(queryClient);
+      const previousData = forecastQueries.map(key => ({
+        key,
+        data: queryClient.getQueryData(key),
+      }));
+
+      // Get current balance for recalculation
+      const balanceData = queryClient.getQueryData<{ balance: string }>(['balance']);
+      const startingBalance = balanceData ? parseFloat(balanceData.balance) * 100 : 0;
+
+      // Create optimistic entry with temporary ID
+      const optimisticEntry = {
+        id: Date.now(), // Temporary ID
+        amount: data.amount.toString(),
+        type: data.type,
+        note: data.note || null,
+        isRecurring: !!data.recurringRule,
+        isSkipped: false,
+      };
+
+      // Update all forecast queries
+      const targetDate = data.date || data.recurringStartDate;
+      if (targetDate) {
+        forecastQueries.forEach(queryKey => {
+          const cachedData = queryClient.getQueryData<DailyProjection[]>(queryKey);
+          if (cachedData) {
+            const updated = addEntryToCache(
+              cachedData,
+              optimisticEntry,
+              targetDate,
+              startingBalance
+            );
+            queryClient.setQueryData(queryKey, updated);
+          }
+        });
+      }
+
+      return { previousData };
+    },
+    onError: (_err, _data, context) => {
+      if (context?.previousData) {
+        context.previousData.forEach(({ key, data }) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
     },
   });
 
-  // Edit occurrence mutation
+  // Edit occurrence mutation with optimistic updates
   const editOccurrenceMutation = useMutation({
     mutationFn: async ({
       entryId,
@@ -150,12 +251,44 @@ function App() {
 
       return response.json();
     },
-    onSuccess: () => {
+    onMutate: async ({ entryId, date, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['forecasts'] });
+
+      const forecastQueries = getAllForecastQueries(queryClient);
+      const previousData = forecastQueries.map(key => ({
+        key,
+        data: queryClient.getQueryData(key),
+      }));
+
+      forecastQueries.forEach(queryKey => {
+        const cachedData = queryClient.getQueryData<DailyProjection[]>(queryKey);
+        if (cachedData) {
+          const updated = updateEntryOverrideInCache(
+            cachedData,
+            entryId,
+            date,
+            data.overrideAmount,
+            data.overrideNote
+          );
+          queryClient.setQueryData(queryKey, updated);
+        }
+      });
+
+      return { previousData };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousData) {
+        context.previousData.forEach(({ key, data }) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
     },
   });
 
-  // Delete entry mutation
+  // Delete entry mutation with optimistic updates
   const deleteEntryMutation = useMutation({
     mutationFn: async (entryId: number) => {
       const response = await fetch(`${API_BASE_URL}/api/entries/${entryId}`, {
@@ -169,12 +302,41 @@ function App() {
 
       return;
     },
-    onSuccess: () => {
+    onMutate: async (entryId) => {
+      await queryClient.cancelQueries({ queryKey: ['forecasts'] });
+
+      const forecastQueries = getAllForecastQueries(queryClient);
+      const previousData = forecastQueries.map(key => ({
+        key,
+        data: queryClient.getQueryData(key),
+      }));
+
+      const balanceData = queryClient.getQueryData<{ balance: string }>(['balance']);
+      const startingBalance = balanceData ? parseFloat(balanceData.balance) * 100 : 0;
+
+      forecastQueries.forEach(queryKey => {
+        const cachedData = queryClient.getQueryData<DailyProjection[]>(queryKey);
+        if (cachedData) {
+          const updated = removeEntryFromCache(cachedData, entryId, startingBalance);
+          queryClient.setQueryData(queryKey, updated);
+        }
+      });
+
+      return { previousData };
+    },
+    onError: (_err, _entryId, context) => {
+      if (context?.previousData) {
+        context.previousData.forEach(({ key, data }) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
     },
   });
 
-  // Update entry mutation (for one-time entries)
+  // Update entry mutation (for one-time entries) with optimistic updates
   const updateEntryMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: EntryFormData }) => {
       const response = await fetch(`${API_BASE_URL}/api/entries/${id}`, {
@@ -195,7 +357,36 @@ function App() {
 
       return response.json();
     },
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['forecasts'] });
+
+      const forecastQueries = getAllForecastQueries(queryClient);
+      const previousData = forecastQueries.map(key => ({
+        key,
+        data: queryClient.getQueryData(key),
+      }));
+
+      const balanceData = queryClient.getQueryData<{ balance: string }>(['balance']);
+      const startingBalance = balanceData ? parseFloat(balanceData.balance) * 100 : 0;
+
+      forecastQueries.forEach(queryKey => {
+        const cachedData = queryClient.getQueryData<DailyProjection[]>(queryKey);
+        if (cachedData) {
+          const updated = updateEntryInCache(cachedData, id, data, startingBalance);
+          queryClient.setQueryData(queryKey, updated);
+        }
+      });
+
+      return { previousData };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousData) {
+        context.previousData.forEach(({ key, data }) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['forecasts'] });
     },
   });
