@@ -62,9 +62,9 @@ export function EntryDialog({
         setDate(initialData.date);
         setRecurringStartDate(initialData.date);
       } else {
-        // Reset for create mode
+        // Reset for create mode - type comes from initialData
         setAmountDollars('');
-        setType('income');
+        setType(initialData?.type || 'income');
         setNote('');
         setIsRecurring(false);
         setDate(defaultDate || '');
@@ -148,7 +148,9 @@ export function EntryDialog({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground">
-            {mode === 'create' ? 'New Entry' : 'Edit Entry'}
+            {mode === 'create'
+              ? (type === 'income' ? 'Add Income' : 'Add Expense')
+              : 'Edit Entry'}
           </h2>
           <button
             onClick={onClose}
@@ -161,7 +163,23 @@ export function EntryDialog({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Amount field */}
+          {/* Note field - FIRST */}
+          <div className="space-y-2">
+            <label htmlFor="note" className="text-sm font-medium text-foreground">
+              Note
+            </label>
+            <input
+              id="note"
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+              placeholder="Describe this entry..."
+              autoFocus
+            />
+          </div>
+
+          {/* Amount field - SECOND */}
           <div className="space-y-2">
             <label htmlFor="amount" className="text-sm font-medium text-foreground">
               Amount
@@ -175,7 +193,6 @@ export function EntryDialog({
               onChange={(e) => setAmountDollars(e.target.value)}
               className="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
               placeholder="0.00"
-              autoFocus
               aria-invalid={!!errors.amount}
               aria-describedby={errors.amount ? 'amount-error' : undefined}
             />
@@ -184,35 +201,6 @@ export function EntryDialog({
                 {errors.amount}
               </p>
             )}
-          </div>
-
-          {/* Type field - Radio buttons */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Type</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="type"
-                  value="income"
-                  checked={type === 'income'}
-                  onChange={(e) => setType(e.target.value as 'income' | 'expense')}
-                  className="w-4 h-4 text-primary border-border focus:ring-2 focus:ring-ring"
-                />
-                <span className="text-sm text-foreground">Income</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="type"
-                  value="expense"
-                  checked={type === 'expense'}
-                  onChange={(e) => setType(e.target.value as 'income' | 'expense')}
-                  className="w-4 h-4 text-primary border-border focus:ring-2 focus:ring-ring"
-                />
-                <span className="text-sm text-foreground">Expense</span>
-              </label>
-            </div>
           </div>
 
           {/* Recurring toggle - Only show in create mode */}
@@ -293,21 +281,6 @@ export function EntryDialog({
               </div>
             </>
           )}
-
-          {/* Note field */}
-          <div className="space-y-2">
-            <label htmlFor="note" className="text-sm font-medium text-foreground">
-              Note (optional)
-            </label>
-            <textarea
-              id="note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground focus:ring-2 focus:ring-ring focus:outline-none resize-none"
-              placeholder="Add a note..."
-            />
-          </div>
 
           {/* Form actions */}
           <div className="flex gap-2 justify-between">

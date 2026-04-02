@@ -5,7 +5,7 @@ import type { DailyProjection } from '../types/forecast';
 type DayListCompactProps = {
   days: DailyProjection[];
   onEntryClick: (entryId: number, date: string) => void;
-  onAddEntry: (date: string) => void;
+  onAddEntry: (date: string, type: 'income' | 'expense') => void;
 };
 
 export function DayListCompact({

@@ -109,7 +109,8 @@ function App() {
       forecastQueries.forEach(queryKey => {
         const data = queryClient.getQueryData<DailyProjection[]>(queryKey);
         if (data) {
-          const updated = recalculateBalances(data, newBalance);
+          // newBalance is in cents, convert to decimal Kč
+          const updated = recalculateBalances(data, newBalance / 100);
           queryClient.setQueryData(queryKey, updated);
         }
       });
@@ -182,14 +183,14 @@ function App() {
         data: queryClient.getQueryData(key),
       }));
 
-      // Get current balance for recalculation
+      // Get current balance for recalculation (in decimal Kč)
       const balanceData = queryClient.getQueryData<{ balance: string }>(['balance']);
-      const startingBalance = balanceData ? parseFloat(balanceData.balance) * 100 : 0;
+      const startingBalance = balanceData ? parseFloat(balanceData.balance) : 0;
 
       // Create optimistic entry with temporary ID
       const optimisticEntry = {
         id: Date.now(), // Temporary ID
-        amount: data.amount.toString(),
+        amount: (data.amount / 100).toFixed(2), // Convert cents to decimal Kč
         type: data.type,
         note: data.note || null,
         isRecurring: !!data.recurringRule,
@@ -312,7 +313,7 @@ function App() {
       }));
 
       const balanceData = queryClient.getQueryData<{ balance: string }>(['balance']);
-      const startingBalance = balanceData ? parseFloat(balanceData.balance) * 100 : 0;
+      const startingBalance = balanceData ? parseFloat(balanceData.balance) : 0;
 
       forecastQueries.forEach(queryKey => {
         const cachedData = queryClient.getQueryData<DailyProjection[]>(queryKey);
@@ -367,7 +368,7 @@ function App() {
       }));
 
       const balanceData = queryClient.getQueryData<{ balance: string }>(['balance']);
-      const startingBalance = balanceData ? parseFloat(balanceData.balance) * 100 : 0;
+      const startingBalance = balanceData ? parseFloat(balanceData.balance) : 0;
 
       forecastQueries.forEach(queryKey => {
         const cachedData = queryClient.getQueryData<DailyProjection[]>(queryKey);
@@ -396,11 +397,19 @@ function App() {
     balanceMutation.mutate(newBalance);
   };
 
-  const handleAddEntry = (date: string) => {
+  const handleAddEntry = (date: string, type: 'income' | 'expense') => {
     setEntryDialogState({
       isOpen: true,
       mode: 'create',
       date,
+      entryData: {
+        entryId: 0,
+        amount: '0',
+        type,
+        note: null,
+        date,
+        isRecurring: false,
+      },
     });
   };
 

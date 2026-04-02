@@ -20,7 +20,7 @@ export function getAllForecastQueries(queryClient: QueryClient): Array<[string, 
 /**
  * Recalculates daily balances starting from a given balance
  * @param days - Array of daily projections to update
- * @param startingBalance - Starting balance in cents
+ * @param startingBalance - Starting balance in decimal Kč
  * @param fromDate - Optional date to start recalculating from (YYYY-MM-DD)
  * @returns Updated array with recalculated balances
  */
