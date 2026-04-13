@@ -63,6 +63,13 @@ function App() {
   // Fetch forecast data
   const { data: forecasts, isLoading, isError, error } = useForecasts(forecastStartDate, forecastEndDate);
 
+  // Separate query for entry list: always covers today → selectedCalendarDate
+  const entryRangeStart = selectedCalendarDate && selectedCalendarDate < todayStr ? selectedCalendarDate : todayStr;
+  const entryRangeEnd = selectedCalendarDate && selectedCalendarDate > todayStr ? selectedCalendarDate : todayStr;
+  const { data: entryRangeForecasts } = useForecasts(entryRangeStart, entryRangeEnd, {
+    enabled: !!selectedCalendarDate,
+  });
+
   // Fetch calendar dots for current month (independent of forecast window)
   const currentMonthStr = format(currentMonth, 'yyyy-MM');
   const { data: entryDates } = useEntryDates(currentMonthStr);
@@ -625,7 +632,7 @@ function App() {
             {/* Entry List */}
             <EntryListView
               selectedDate={selectedCalendarDate}
-              forecasts={forecasts}
+              forecasts={entryRangeForecasts}
               onEntryClick={handleEntryClick}
               onDeleteEntry={handleDeleteEntry}
             />

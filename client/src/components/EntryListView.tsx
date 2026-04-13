@@ -15,28 +15,16 @@ export function EntryListView({
   onEntryClick,
   onDeleteEntry,
 }: EntryListViewProps) {
-  // Get today's date from forecasts (first day in forecast)
-  const today = forecasts && forecasts.length > 0 ? forecasts[0]?.date : '';
+  const today = format(new Date(), 'yyyy-MM-dd');
 
-  // Filter by date range - only show days with entries between today and selected date
-  const getFilteredDays = (): DailyProjection[] => {
-    if (!selectedDate || !forecasts || !today) return [];
+  // forecasts already covers exactly today → selectedDate, just filter for days with entries
+  const filteredDays: DailyProjection[] = !selectedDate || !forecasts
+    ? []
+    : forecasts.filter(day => day.entries.length > 0);
 
-    // Determine range: always between today and selected date
-    const startDate = selectedDate < today ? selectedDate : today;
-    const endDate = selectedDate < today ? today : selectedDate;
-
-    // Show all days with entries in the range
-    return forecasts
-      .filter(day => day.date >= startDate && day.date <= endDate && day.entries.length > 0)
-      .sort((a, b) => a.date.localeCompare(b.date));
-  };
-
-  const filteredDays = getFilteredDays();
-
-  // Calculate date range for header
-  const startDate = selectedDate && today ? (selectedDate < today ? selectedDate : today) : '';
-  const endDate = selectedDate && today ? (selectedDate < today ? today : selectedDate) : '';
+  // Date range for header
+  const startDate = selectedDate ? (selectedDate < today ? selectedDate : today) : '';
+  const endDate = selectedDate ? (selectedDate < today ? today : selectedDate) : '';
 
   // Empty state
   if (!selectedDate) {

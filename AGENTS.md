@@ -1,6 +1,6 @@
 # Agent Instructions - Budget Forecast App
 
-**Last updated:** 2026-03-31
+**Last updated:** 2026-04-02
 
 ## Project Context
 
@@ -45,6 +45,12 @@ Budget forecasting SPA for therapists with irregular income. Stack: Vite + React
 - **CRITICAL: Always verify with the actual build command, not filtered checks**
 - When type-checking, include ALL affected directories (don't filter to only one path)
 - Show verification output (don't assume it passes)
+
+### Vercel Serverless Functions
+- **New API endpoints require dev server restart** to be picked up
+- Endpoint location: `/api/**/*.ts` maps to `/api/**` routes
+- After creating new endpoints, remind user to restart `yarn dev`
+- Test endpoints with curl after restart to verify they're working
 
 ### Testing & Temporary Files
 - **Use `.test-temp/` folder** for all Playwright tests, test scripts, and temporary files
@@ -196,9 +202,29 @@ One sentence explaining what this does.
 ## Domain-Specific Rules
 
 ### Money Handling
-- Database: `decimal(12, 2)`
-- Frontend: Integer cents (`amount * 100`)
-- Display: Format with `Intl.NumberFormat`
+- Database: `decimal(12, 2)` - Stored as decimal Kč (e.g., "511.00")
+- API: Decimal strings (e.g., "511.00") - **DO NOT divide by 100**
+- Frontend state: Integer cents for input handling (`amount * 100`)
+- Display: Use `Intl.NumberFormat` with decimal values, **NOT cents**
+
+**Critical:** API returns decimal Kč strings. Only convert cents→decimal when sending to API, not when displaying:
+```typescript
+// ✅ CORRECT - Display decimal directly
+const formatCurrency = (decimalAmount: number) => {
+  return new Intl.NumberFormat('cs-CZ', {
+    style: 'currency',
+    currency: 'CZK'
+  }).format(decimalAmount); // NO /100!
+};
+
+// ❌ WRONG - Double conversion
+const formatCurrency = (decimalAmount: number) => {
+  return new Intl.NumberFormat('cs-CZ', {
+    style: 'currency',
+    currency: 'CZK'
+  }).format(decimalAmount / 100); // Would show 5.11 instead of 511
+};
+```
 
 ### Date Handling
 - Use `date-fns` for all date operations
@@ -263,6 +289,9 @@ budget-forecast/
 - ❌ **Filtering type-check output that hides transitive dependency errors**
 - ❌ **Not checking `/shared` when verifying `/api` changes**
 - ❌ **Adding duplicate dependencies in workspace packages (always use root for shared deps)**
+- ❌ **Dividing decimal Kč amounts by 100 when formatting (causes 511 → 5.11 bug)**
+- ❌ **Forgetting that new Vercel serverless endpoints require dev server restart**
+- ❌ **Using forecast data for calendar dots (ties them to forecast window)**
 
 ## Questions or Blockers?
 
