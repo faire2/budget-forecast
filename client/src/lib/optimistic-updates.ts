@@ -130,13 +130,13 @@ export function updateEntryInCache(
     foundDay.expenses -= oldAmount;
   }
 
-  // Update entry data
-  foundEntry.amount = updatedData.amount.toString();
+  // Update entry data (convert cents → decimal Kč for cache storage)
+  const newAmount = updatedData.amount / 100;
+  foundEntry.amount = newAmount.toFixed(2);
   foundEntry.type = updatedData.type;
   foundEntry.note = updatedData.note || null;
 
   // Add new entry's contribution to totals
-  const newAmount = updatedData.amount;
   if (updatedData.type === 'income') {
     foundDay.income += newAmount;
   } else {

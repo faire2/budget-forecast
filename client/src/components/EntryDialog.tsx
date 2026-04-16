@@ -23,7 +23,7 @@ type EntryDialogProps = {
   // For edit mode:
   initialData?: {
     entryId: number;
-    amount: string; // in cents
+    amount: string; // decimal Kč (e.g. "123.00")
     type: 'income' | 'expense';
     note: string | null;
     date: string;
@@ -54,7 +54,7 @@ export function EntryDialog({
     if (isOpen) {
       if (mode === 'edit' && initialData) {
         // Pre-fill with existing data
-        const amountInDollars = (parseFloat(initialData.amount) / 100).toFixed(2);
+        const amountInDollars = parseFloat(initialData.amount).toFixed(2);
         setAmountDollars(amountInDollars);
         setType(initialData.type);
         setNote(initialData.note || '');
