@@ -7,6 +7,7 @@ type DayListCompactProps = {
   onEntryClick: (entryId: number, date: string) => void;
   onAddEntry: (date: string, type: 'income' | 'expense') => void;
   onDeleteEntry?: (entryId: number, date: string, isRecurring: boolean) => void;
+  onRescheduleEntry?: (entryId: number, fromDate: string, toDate: string) => void;
 };
 
 export function DayListCompact({
@@ -14,6 +15,7 @@ export function DayListCompact({
   onEntryClick,
   onAddEntry,
   onDeleteEntry,
+  onRescheduleEntry,
 }: DayListCompactProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [displayDays, setDisplayDays] = useState(days);
@@ -55,6 +57,7 @@ export function DayListCompact({
             onEntryClick={onEntryClick}
             onAddEntry={onAddEntry}
             {...(onDeleteEntry && { onDeleteEntry })}
+            {...(onRescheduleEntry && { onRescheduleEntry })}
           />
         </div>
       ))}

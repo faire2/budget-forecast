@@ -1,15 +1,18 @@
+import { useState, useRef } from 'react';
 import { format, isToday } from 'date-fns';
-import { TrendingUp, TrendingDown, Plus, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, Trash2, CalendarDays } from 'lucide-react';
 import type { DailyProjection, ProjectedEntry } from '@shared/types/forecast-output';
+import { Calendar } from './Calendar';
 
 type DayRowProps = {
   day: DailyProjection;
   onEntryClick: (entryId: number, date: string) => void;
   onAddEntry: (date: string, type: 'income' | 'expense') => void;
   onDeleteEntry?: (entryId: number, date: string, isRecurring: boolean) => void;
+  onRescheduleEntry?: (entryId: number, fromDate: string, toDate: string) => void;
 };
 
-export function DayRow({ day, onEntryClick, onAddEntry, onDeleteEntry }: DayRowProps) {
+export function DayRow({ day, onEntryClick, onAddEntry, onDeleteEntry, onRescheduleEntry }: DayRowProps) {
   const dayIsToday = isToday(new Date(day.date));
 
   const formatCurrency = (decimalAmount: number) => {
@@ -59,6 +62,7 @@ export function DayRow({ day, onEntryClick, onAddEntry, onDeleteEntry }: DayRowP
             onClick={() => onEntryClick(entry.id, day.date)}
             formatAmount={formatAmount}
             {...(onDeleteEntry && { onDelete: () => onDeleteEntry(entry.id, day.date, entry.isRecurring) })}
+            {...(onRescheduleEntry && { onReschedule: (toDate: string) => onRescheduleEntry(entry.id, day.date, toDate) })}
           />
         ))}
 
@@ -101,63 +105,125 @@ type EntryLineProps = {
   date: string;
   onClick: () => void;
   onDelete?: () => void;
+  onReschedule?: (toDate: string) => void;
   formatAmount: (amount: string) => string;
 };
 
-function EntryLine({ entry, onClick, onDelete, formatAmount }: EntryLineProps) {
+function EntryLine({ entry, date, onClick, onDelete, onReschedule, formatAmount }: EntryLineProps) {
   const isIncome = entry.type === 'income';
   const Icon = isIncome ? TrendingUp : TrendingDown;
 
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date(date + 'T00:00:00'));
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
+  const calBtnRef = useRef<HTMLButtonElement>(null);
+
+  const handleCalendarOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = calBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const top = rect.bottom + 8;
+      const left = Math.max(8, Math.min(rect.left - 120, window.innerWidth - 304));
+      setPopoverStyle({ top, left });
+      setCalendarMonth(new Date(date + 'T00:00:00'));
+      setShowCalendar(true);
+    }
+  };
+
+  const handleDateSelect = (newDate: string) => {
+    setShowCalendar(false);
+    if (newDate !== date) {
+      onReschedule?.(newDate);
+    }
+  };
+
   return (
-    <div className="w-full px-4 py-2 flex items-center gap-3 group">
-      {/* Icon */}
-      <Icon
-        className={`w-4 h-4 flex-shrink-0 ${
-          isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-        }`}
-      />
+    <>
+      <div className="w-full px-4 py-2 flex items-center gap-3 group">
+        {/* Icon */}
+        <Icon
+          className={`w-4 h-4 flex-shrink-0 ${
+            isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+          }`}
+        />
 
-      {/* Note/Label - Clickable */}
-      <button
-        onClick={onClick}
-        className={`flex-1 text-left text-sm min-w-0 hover:underline ${
-          entry.isSkipped
-            ? 'line-through text-muted-foreground'
-            : 'text-foreground'
-        }`}
-        disabled={entry.isSkipped}
-      >
-        {entry.note || (isIncome ? 'Income' : 'Expense')}
-      </button>
-
-      {/* Amount */}
-      <span
-        className={`text-sm font-medium flex-shrink-0 ${
-          entry.isSkipped
-            ? 'line-through text-muted-foreground'
-            : isIncome
-            ? 'text-green-600 dark:text-green-400'
-            : 'text-red-600 dark:text-red-400'
-        }`}
-      >
-        {isIncome ? '+' : '-'}
-        {formatAmount(entry.amount)}
-      </span>
-
-      {/* Delete button */}
-      {onDelete && (
+        {/* Note/Label - Clickable */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-          aria-label="Delete entry"
+          onClick={onClick}
+          className={`flex-1 text-left text-sm min-w-0 hover:underline ${
+            entry.isSkipped
+              ? 'line-through text-muted-foreground'
+              : 'text-foreground'
+          }`}
           disabled={entry.isSkipped}
         >
-          <Trash2 className="w-4 h-4" />
+          {entry.note || (isIncome ? 'Income' : 'Expense')}
         </button>
+
+        {/* Amount */}
+        <span
+          className={`text-sm font-medium flex-shrink-0 ${
+            entry.isSkipped
+              ? 'line-through text-muted-foreground'
+              : isIncome
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-600 dark:text-red-400'
+          }`}
+        >
+          {isIncome ? '+' : '-'}
+          {formatAmount(entry.amount)}
+        </span>
+
+        {/* Reschedule button */}
+        {onReschedule && (
+          <button
+            ref={calBtnRef}
+            onClick={handleCalendarOpen}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all"
+            aria-label="Reschedule entry"
+            disabled={entry.isSkipped}
+          >
+            <CalendarDays className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Delete button */}
+        {onDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+            aria-label="Delete entry"
+            disabled={entry.isSkipped}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Calendar popover */}
+      {showCalendar && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowCalendar(false)}
+          />
+          <div
+            className="fixed z-50 w-72"
+            style={popoverStyle}
+          >
+            <Calendar
+              selectedDate={date}
+              datesWithEntries={[]}
+              onDateSelect={handleDateSelect}
+              currentMonth={calendarMonth}
+              onMonthChange={setCalendarMonth}
+            />
+          </div>
+        </>
       )}
-    </div>
+    </>
   );
 }

@@ -7,6 +7,7 @@ import { DayListCompact } from './components/DayListCompact';
 import { Calendar } from './components/Calendar';
 import { EntryListView } from './components/EntryListView';
 import { DeleteRecurringDialog } from './components/DeleteRecurringDialog';
+import { RescheduleRecurringDialog } from './components/RescheduleRecurringDialog';
 import { useForecasts } from './hooks/useForecasts';
 import { useEntryDates } from './hooks/useEntryDates';
 import {
@@ -51,6 +52,15 @@ function App() {
     isOpen: boolean;
     entryId: number;
     date: string;
+    note: string;
+  } | null>(null);
+
+  // Reschedule recurring dialog state
+  const [rescheduleDialogState, setRescheduleDialogState] = useState<{
+    isOpen: boolean;
+    entryId: number;
+    fromDate: string;
+    toDate: string;
     note: string;
   } | null>(null);
 
@@ -533,6 +543,86 @@ function App() {
     deleteEntryMutation.mutate(deleteRecurringDialogState.entryId);
   };
 
+  const handleRescheduleEntry = (entryId: number, fromDate: string, toDate: string) => {
+    const day = forecasts?.find(d => d.date === fromDate);
+    const entry = day?.entries.find(e => e.id === entryId);
+
+    if (!entry) return;
+
+    if (entry.isRecurring) {
+      setRescheduleDialogState({
+        isOpen: true,
+        entryId,
+        fromDate,
+        toDate,
+        note: entry.note || 'Recurring entry',
+      });
+    } else {
+      updateEntryMutation.mutate({
+        id: entryId,
+        data: {
+          amount: Math.round(parseFloat(entry.amount) * 100),
+          type: entry.type,
+          note: entry.note || '',
+          date: toDate,
+        },
+      });
+    }
+  };
+
+  const handleRescheduleThis = async () => {
+    if (!rescheduleDialogState) return;
+
+    const { entryId, fromDate, toDate } = rescheduleDialogState;
+    const day = forecasts?.find(d => d.date === fromDate);
+    const entry = day?.entries.find(e => e.id === entryId);
+
+    if (!entry) return;
+
+    try {
+      await fetch(
+        `${API_BASE_URL}/api/entries/${entryId}/occurrences/${fromDate}/skip`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+      );
+
+      await fetch(`${API_BASE_URL}/api/entries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: entry.amount,
+          type: entry.type,
+          note: entry.note || null,
+          date: toDate,
+        }),
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['forecasts'] });
+    } catch (error) {
+      console.error('Failed to reschedule occurrence:', error);
+    }
+  };
+
+  const handleRescheduleAll = () => {
+    if (!rescheduleDialogState) return;
+
+    const { entryId, fromDate, toDate } = rescheduleDialogState;
+    const day = forecasts?.find(d => d.date === fromDate);
+    const entry = day?.entries.find(e => e.id === entryId);
+
+    if (!entry || !entry.recurringRule) return;
+
+    updateEntryMutation.mutate({
+      id: entryId,
+      data: {
+        amount: Math.round(parseFloat(entry.amount) * 100),
+        type: entry.type,
+        note: entry.note || '',
+        recurringRule: entry.recurringRule,
+        recurringStartDate: toDate,
+      },
+    });
+  };
+
   const handleDialogSubmit = (data: EntryFormData) => {
     if (entryDialogState.mode === 'create') {
       // Create new entry
@@ -682,6 +772,7 @@ function App() {
                 onEntryClick={handleEntryClick}
                 onAddEntry={handleAddEntry}
                 onDeleteEntry={handleDeleteEntry}
+                onRescheduleEntry={handleRescheduleEntry}
               />
             )}
 
@@ -714,6 +805,17 @@ function App() {
         onDeleteAll={handleDeleteRecurringAll}
         entryNote={deleteRecurringDialogState?.note || ''}
         date={deleteRecurringDialogState?.date || ''}
+      />
+
+      {/* Reschedule Recurring Dialog */}
+      <RescheduleRecurringDialog
+        isOpen={rescheduleDialogState?.isOpen || false}
+        onClose={() => setRescheduleDialogState(null)}
+        onRescheduleThis={handleRescheduleThis}
+        onRescheduleAll={handleRescheduleAll}
+        entryNote={rescheduleDialogState?.note || ''}
+        fromDate={rescheduleDialogState?.fromDate || ''}
+        toDate={rescheduleDialogState?.toDate || ''}
       />
 
       {/* Loading/Error States */}
