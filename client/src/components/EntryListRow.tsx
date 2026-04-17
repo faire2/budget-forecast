@@ -1,6 +1,6 @@
 import { format, isToday } from 'date-fns';
 import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
-import type { DailyProjection, ProjectedEntry } from '../types/forecast';
+import type { DailyProjection, ProjectedEntry } from '@shared/types/forecast-output';
 
 type EntryListRowProps = {
   day: DailyProjection;

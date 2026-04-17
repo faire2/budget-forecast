@@ -28,6 +28,8 @@ type EntryDialogProps = {
     note: string | null;
     date: string;
     isRecurring: boolean;
+    recurringRule?: 'weekly' | 'biweekly' | 'monthly';
+    recurringStartDate?: string;
   };
 };
 
@@ -60,7 +62,8 @@ export function EntryDialog({
         setNote(initialData.note || '');
         setIsRecurring(initialData.isRecurring);
         setDate(initialData.date);
-        setRecurringStartDate(initialData.date);
+        setRecurringRule(initialData.recurringRule || 'weekly');
+        setRecurringStartDate(initialData.recurringStartDate || initialData.date);
       } else {
         // Reset for create mode - type comes from initialData
         setAmountDollars('');

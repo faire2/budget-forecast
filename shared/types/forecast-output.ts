@@ -1,21 +1,20 @@
-// Client-side types for forecast data
-// Keep in sync with server/src/types/forecast.ts
+// Shared output types — no DB imports, safe to use in both API and client bundles
 
-// Entry detail in a daily projection
-export type ProjectedEntry = {
+export interface ProjectedEntry {
   id: number;
   amount: string;
   type: 'income' | 'expense';
   note: string | null;
   isRecurring: boolean;
   isSkipped: boolean;
-};
+  recurringRule?: 'weekly' | 'biweekly' | 'monthly';
+  recurringStartDate?: string;
+}
 
-// Daily projection result
-export type DailyProjection = {
+export interface DailyProjection {
   date: string; // ISO YYYY-MM-DD
   income: number;
   expenses: number;
   balance: number; // end of day projected balance
   entries: ProjectedEntry[];
-};
+}

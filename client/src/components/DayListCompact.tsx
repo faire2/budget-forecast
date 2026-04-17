@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DayRow } from './DayRow';
-import type { DailyProjection } from '../types/forecast';
+import type { DailyProjection } from '@shared/types/forecast-output';
 
 type DayListCompactProps = {
   days: DailyProjection[];

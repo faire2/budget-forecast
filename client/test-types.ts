@@ -1,4 +1,4 @@
-import type { DailyProjection } from './src/types/forecast';
+import type { DailyProjection } from '../shared/types/forecast-output';
 import { fetchForecasts } from './src/lib/api';
 import { useForecasts } from './src/hooks/useForecasts';
 

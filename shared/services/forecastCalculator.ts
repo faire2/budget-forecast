@@ -111,6 +111,8 @@ export function calculateForecast(input: ForecastInput): DailyProjection[] {
           note: effectiveNote,
           isRecurring,
           isSkipped,
+          ...(entry.recurringRule && { recurringRule: entry.recurringRule }),
+          ...(entry.recurringStartDate && { recurringStartDate: entry.recurringStartDate }),
         });
       }
     }

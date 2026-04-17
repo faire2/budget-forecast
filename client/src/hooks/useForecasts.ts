@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { DailyProjection } from '@/types/forecast';
+import type { DailyProjection } from '@shared/types/forecast-output';
 import { fetchForecasts } from '@/lib/api';
 
 /**

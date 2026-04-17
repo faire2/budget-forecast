@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { EntryListRow } from './EntryListRow';
-import type { DailyProjection } from '../types/forecast';
+import type { DailyProjection } from '@shared/types/forecast-output';
 
 type EntryListViewProps = {
   selectedDate: string | null;

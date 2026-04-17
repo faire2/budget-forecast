@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { DailyProjection, ProjectedEntry } from '../types/forecast';
+import type { DailyProjection, ProjectedEntry } from '@shared/types/forecast-output';
 import type { EntryFormData } from '../components/EntryDialog';
 
 /**

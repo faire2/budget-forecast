@@ -1,4 +1,4 @@
-import type { DailyProjection } from '@/types/forecast';
+import type { DailyProjection } from '@shared/types/forecast-output';
 
 // Get API base URL from environment variable (for local dev)
 // In production (Vercel), this is empty and uses relative paths

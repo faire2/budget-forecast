@@ -17,7 +17,7 @@ import {
   removeEntryFromCache,
   updateEntryOverrideInCache,
 } from './lib/optimistic-updates';
-import type { DailyProjection } from './types/forecast';
+import type { DailyProjection } from '@shared/types/forecast-output';
 
 function App() {
   const [balance, setBalance] = useState(0); // Will be fetched from API
@@ -32,11 +32,13 @@ function App() {
     date: string;
     entryData?: {
       entryId: number;
-      amount: string; // cents
+      amount: string; // decimal Kč
       type: 'income' | 'expense';
       note: string | null;
       date: string;
       isRecurring: boolean;
+      recurringRule?: 'weekly' | 'biweekly' | 'monthly';
+      recurringStartDate?: string;
     };
   }>({
     isOpen: false,
@@ -370,7 +372,9 @@ function App() {
           amount: (data.amount / 100).toFixed(2),
           type: data.type,
           note: data.note || null,
-          date: data.date,
+          date: data.date ?? null,
+          recurringRule: data.recurringRule ?? null,
+          recurringStartDate: data.recurringStartDate ?? null,
         }),
       });
 
@@ -453,6 +457,8 @@ function App() {
           note: entry.note,
           date,
           isRecurring: entry.isRecurring,
+          ...(entry.recurringRule && { recurringRule: entry.recurringRule }),
+          ...(entry.recurringStartDate && { recurringStartDate: entry.recurringStartDate }),
         },
       });
     }
@@ -530,25 +536,33 @@ function App() {
       const { entryId, isRecurring } = entryDialogState.entryData;
 
       if (isRecurring) {
-        // For recurring entries, create an override
-        const overrideData: { overrideAmount?: string; overrideNote?: string | null } = {};
+        const originalRule = entryDialogState.entryData.recurringRule;
+        const ruleChanged = data.recurringRule !== originalRule;
 
-        // Compare with original values
-        const originalAmountCents = parseFloat(entryDialogState.entryData.amount);
-        if (data.amount !== originalAmountCents) {
-          overrideData.overrideAmount = (data.amount / 100).toFixed(2);
-        }
+        if (ruleChanged) {
+          // Rule change affects all occurrences — update the base entry
+          updateEntryMutation.mutate({ id: entryId, data });
+        } else {
+          // Same rule — create a per-occurrence override for amount/note
+          const overrideData: { overrideAmount?: string; overrideNote?: string | null } = {};
 
-        if (data.note !== (entryDialogState.entryData.note || '')) {
-          overrideData.overrideNote = data.note || null;
-        }
+          const originalAmountKc = parseFloat(entryDialogState.entryData.amount);
+          const newAmountKc = data.amount / 100;
+          if (Math.abs(newAmountKc - originalAmountKc) > 0.001) {
+            overrideData.overrideAmount = newAmountKc.toFixed(2);
+          }
 
-        if (Object.keys(overrideData).length > 0) {
-          editOccurrenceMutation.mutate({
-            entryId,
-            date: entryDialogState.date,
-            data: overrideData,
-          });
+          if (data.note !== (entryDialogState.entryData.note || '')) {
+            overrideData.overrideNote = data.note || null;
+          }
+
+          if (Object.keys(overrideData).length > 0) {
+            editOccurrenceMutation.mutate({
+              entryId,
+              date: entryDialogState.date,
+              data: overrideData,
+            });
+          }
         }
       } else {
         // For one-time entries, update the full entry
