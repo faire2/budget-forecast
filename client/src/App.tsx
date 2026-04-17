@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { addDays, format } from 'date-fns';
+import { addDays, format, startOfMonth, endOfMonth } from 'date-fns';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { BalanceAnchor } from './components/BalanceAnchor';
 import { EntryDialog, type EntryFormData } from './components/EntryDialog';
@@ -75,6 +75,11 @@ function App() {
   // Fetch calendar dots for current month (independent of forecast window)
   const currentMonthStr = format(currentMonth, 'yyyy-MM');
   const { data: entryDates } = useEntryDates(currentMonthStr);
+
+  // Fetch totals for the currently viewed calendar month
+  const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+  const { data: monthForecasts } = useForecasts(monthStart, monthEnd);
 
   // Get API base URL from environment variable (for local dev)
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -643,6 +648,11 @@ function App() {
               onMonthChange={handleMonthChange}
             />
 
+            {/* Forecast totals for viewed month */}
+            {monthForecasts && monthForecasts.length > 0 && (
+              <ForecastTotals forecasts={monthForecasts} />
+            )}
+
             {/* Entry List */}
             <EntryListView
               selectedDate={selectedCalendarDate}
@@ -724,6 +734,27 @@ function App() {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function ForecastTotals({ forecasts }: { forecasts: DailyProjection[] }) {
+  const totalIncome = forecasts.reduce((sum, day) => sum + day.income, 0);
+  const totalExpenses = forecasts.reduce((sum, day) => sum + day.expenses, 0);
+
+  const fmt = (amount: number) =>
+    new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK' }).format(amount);
+
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-1 text-sm">
+      <div className="flex justify-between">
+        <span className="text-muted-foreground">Expected income</span>
+        <span className="font-medium text-green-600 dark:text-green-400">{fmt(totalIncome)}</span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-muted-foreground">Expected expenses</span>
+        <span className="font-medium text-red-600 dark:text-red-400">{fmt(totalExpenses)}</span>
+      </div>
     </div>
   );
 }
