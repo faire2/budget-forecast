@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
 import { db } from '../../shared/db/client';
-import { entries } from '../../shared/db/schema';
+import { entries, recurringOverrides } from '../../shared/db/schema';
 import { eq } from 'drizzle-orm';
 
 // Base validation schema with common fields
@@ -123,6 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: 'Entry not found' });
       }
 
+      await db.delete(recurringOverrides).where(eq(recurringOverrides.entryId, entryId));
       await db.delete(entries).where(eq(entries.id, entryId));
 
       return res.status(204).end();
